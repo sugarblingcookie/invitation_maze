@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>초대장 게임 프로토타입</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fbf1de;
+    --bg-grain: rgba(92,70,50,0.05);
+    --ink: #5c4632;
+    --ink-soft: #8a7154;
+    --wall: #c99a6a;
+    --wall-dark: #a97c4f;
+    --path: #f6e8cf;
+    --goal: #ffd57a;
+    --blue: #6fa8dc;
+    --blue-dark: #3d6e99;
+    --red: #e8734a;
+    --red-dark: #b8502a;
+    --pink: #f2879c;
+    --card-bg: #fffaf0;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg);
+    background-image: radial-gradient(circle, var(--bg-grain) 1px, transparent 1px);
+    background-size: 14px 14px;
+    color: var(--ink);
+    font-family: -apple-system, sans-serif;
+    overflow: hidden; touch-action: none;
+  }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+
+  /* ---------- 화면 전환 공통 ---------- */
+  .screen {
+    display: none;
+    width: 100%; height: 100%;
+    flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px;
+    text-align: center;
+  }
+  .screen.active { display: flex; }
+
+  button.primary-btn {
+    margin-top: 20px;
+    font-size: 17px; padding: 12px 28px;
+    border: none; border-radius: 14px;
+    background: var(--blue); color: #fff;
+    box-shadow: 0 4px 0 var(--blue-dark);
+  }
+  button.primary-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--blue-dark); }
+  button.secondary-btn {
+    font-size: 15px; padding: 10px 18px;
+    border: 2px solid var(--wall-dark); border-radius: 12px;
+    background: var(--card-bg); color: var(--ink);
+  }
+  @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+
+  .char-wrap { display: inline-block; }
+  .char-wrap svg { display: block; }
+
+  /* ---------- 1. 커버 화면 ---------- */
+  .envelope {
+    width: 170px; height: 120px;
+    position: relative;
+    cursor: pointer;
+  }
+  #screen-cover .cover-hint { margin-top: 20px; font-size: 15px; color: var(--ink-soft); animation: pulse 1.6s ease-in-out infinite; }
+
+  /* ---------- 낙하 연출 (커버 → 튜토리얼 사이) ---------- */
+  #falling-overlay {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 50;
+  }
+  #falling-overlay.hidden { display: none; }
+  #falling-char {
+    width: 46px; height: 46px;
+    animation: fall 1.1s cubic-bezier(.4,0,.6,1) forwards;
+  }
+  @keyframes fall {
+    0% { transform: translateY(-160px) rotate(-10deg) scale(1); opacity: 1; }
+    80% { opacity: 1; }
+    100% { transform: translateY(160px) rotate(14deg) scale(0.8); opacity: 0; }
+  }
+
+  /* ---------- 낙하 이후 스토리 화면 (1~3) ---------- */
+  .story-char { width: 70px; height: 70px; animation: bounce 1.6s ease-in-out infinite; }
+
+  .speech-bubble {
+    position: relative;
+    margin-top: 30px;
+    padding: 14px 22px;
+    background: var(--card-bg);
+    border: 2px solid var(--wall-dark);
+    border-radius: 16px;
+    font-size: 17px;
+    color: var(--ink);
+    max-width: 240px;
+  }
+  .speech-bubble::before {
+    content: '';
+    position: absolute;
+    top: -14px; left: 50%;
+    transform: translateX(-50%);
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 14px solid var(--wall-dark);
+  }
+  .speech-bubble::after {
+    content: '';
+    position: absolute;
+    top: -11px; left: 50%;
+    transform: translateX(-50%);
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 12px solid var(--card-bg);
+  }
+
+  #screen-story-2 { position: relative; overflow: hidden; }
+  .light-burst {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 320px; height: 320px;
+    margin-top: -160px; margin-left: -160px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,247,214,0.95) 0%, rgba(255,247,214,0) 70%);
+    animation: lightPulse 2.2s ease-in-out infinite;
+    z-index: 0;
+  }
+  @keyframes lightPulse {
+    0%, 100% { transform: scale(1); opacity: 0.75; }
+    50% { transform: scale(1.18); opacity: 1; }
+  }
+
+  .flower-title-wrap { position: relative; z-index: 1; padding: 20px 10px; }
+  .story-title {
+    margin: 0;
+    font-family: 'Black Han Sans', sans-serif;
+    font-weight: normal;
+    font-size: 26px;
+    line-height: 1.55;
+    background: linear-gradient(135deg, #f2879c, #ffd57a, #f2879c);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 18px rgba(255,213,122,0.55);
+    animation: titlePop 0.6s cubic-bezier(.34,1.56,.64,1) both;
+  }
+  @keyframes titlePop {
+    0% { transform: scale(0.6); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .flower {
+    position: absolute;
+    font-size: 22px;
+    animation: flowerFloat 3.2s ease-in-out infinite;
+    opacity: 0.9;
+  }
+  .f1 { top: -10px; left: 6%; animation-delay: 0s; }
+  .f2 { top: 10%; right: 4%; animation-delay: 0.4s; }
+  .f3 { bottom: 20%; left: -2%; animation-delay: 0.8s; }
+  .f4 { bottom: -6px; right: 10%; animation-delay: 1.1s; }
+  .f5 { top: 42%; left: 48%; animation-delay: 1.6s; font-size: 16px; }
+  .f6 { top: -4px; right: 40%; animation-delay: 2s; font-size: 18px; }
+  @keyframes flowerFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-10px) rotate(12deg); }
+  }
+
+  .story-caption {
+    max-width: 280px;
+    padding: 22px;
+    background: var(--card-bg);
+    border: 2px solid var(--wall-dark);
+    border-radius: 14px;
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--ink);
+    box-shadow: 0 4px 14px rgba(92,70,50,0.2);
+  }
+  .story-caption strong { color: var(--red-dark); }
+
+  /* ---------- 2. 튜토리얼 화면 ---------- */
+  .tutorial-pad {
+    margin: 20px 0;
+    display: grid;
+    grid-template-columns: 56px 56px 56px;
+    grid-template-rows: 56px 56px 56px;
+    gap: 6px;
+  }
+  .tutorial-pad div { border-radius: 12px; background: var(--wall); }
+  .tutorial-pad .hint { animation: pulse 1s ease-in-out infinite; background: var(--wall-dark); }
+  .t-up { grid-column: 2; grid-row: 1; }
+  .t-left { grid-column: 1; grid-row: 2; }
+  .t-right { grid-column: 3; grid-row: 2; }
+  .t-down { grid-column: 2; grid-row: 3; }
+
+  /* ---------- 3. 미로 게임 화면 ---------- */
+  #hud { padding: 12px; font-size: 20px; font-weight: bold; color: var(--ink); }
+  #hud.warn { color: var(--red-dark); }
+  #maze-wrap {
+    position: relative;
+    margin-top: 4px;
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(92,70,50,0.25);
+  }
+  #maze { position: relative; border-radius: 8px; overflow: hidden; }
+  .cell { position: absolute; }
+  .cell.wall {
+    background-color: var(--wall);
+    background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.12) 0 4px, transparent 4px 9px);
+  }
+  .cell.path { background: var(--path); }
+  .cell.goal {
+    background: var(--goal);
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,0.6);
+    animation: goalGlow 1.6s ease-in-out infinite;
+  }
+  @keyframes goalGlow { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.15); } }
+  #player {
+    position: absolute;
+    transition: left 0.08s linear, top 0.08s linear;
+  }
+  .heart {
+    position: absolute;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; line-height: 1;
+    color: var(--pink);
+    pointer-events: none;
+    animation: heartIdle 1.4s ease-in-out infinite;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .heart.collected { opacity: 0; transform: scale(1.6); animation: none; }
+  @keyframes heartIdle {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.18); }
+  }
+  .heart-pop {
+    position: absolute;
+    pointer-events: none;
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--pink);
+    animation: heartPop 0.6s ease-out forwards;
+  }
+  @keyframes heartPop {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-22px); opacity: 0; }
+  }
+  #pad {
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: 64px 64px 64px;
+    grid-template-rows: 64px 64px 64px;
+    gap: 6px;
+  }
+  .pad-btn {
+    font-size: 24px;
+    border: none;
+    border-radius: 12px;
+    background: var(--wall);
+    color: #fff;
+    user-select: none;
+    box-shadow: 0 3px 0 var(--wall-dark);
+  }
+  .pad-btn:active { background: var(--wall-dark); box-shadow: none; transform: translateY(3px); }
+  #btn-up { grid-column: 2; grid-row: 1; }
+  #btn-left { grid-column: 1; grid-row: 2; }
+  #btn-right { grid-column: 3; grid-row: 2; }
+  #btn-down { grid-column: 2; grid-row: 3; }
+  #overlay {
+    position: fixed; inset: 0;
+    background: rgba(92,70,50,0.75);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px;
+    z-index: 40;
+  }
+  #overlay.hidden { display: none; }
+  #overlay p { font-size: 22px; text-align: center; padding: 0 24px; color: #fff; }
+  #retry-btn {
+    font-size: 18px; padding: 10px 24px;
+    border: none; border-radius: 12px;
+    background: var(--blue); color: #fff;
+    box-shadow: 0 4px 0 var(--blue-dark);
+  }
+
+  /* ---------- 4. 도착 화면 ---------- */
+  .arrival-scene svg { width: 120px; height: 120px; }
+  #screen-arrival p { margin: 16px 0; font-size: 17px; }
+
+  /* ---------- 5. 초대장 공개 화면 ---------- */
+  #invite-canvas { border-radius: 12px; box-shadow: 0 6px 20px rgba(92,70,50,0.35); max-width: 80vw; height: auto; }
+  .invite-actions { display: flex; gap: 10px; margin-top: 18px; }
+
+  /* ---------- 6. RSVP 화면 ---------- */
+  #screen-rsvp p { font-size: 17px; }
+  .rsvp-buttons { display: flex; gap: 14px; margin-top: 20px; }
+  .rsvp-buttons button {
+    font-size: 18px; padding: 14px 22px;
+    border: none; border-radius: 14px;
+    background: var(--blue); color: #fff;
+    box-shadow: 0 4px 0 var(--blue-dark);
+  }
+  .rsvp-buttons button:last-child { background: var(--pink); box-shadow: 0 4px 0 #c15f72; }
+
+  /* ---------- 7. 엔딩 화면 ---------- */
+  .ending-scene { display: flex; gap: 14px; }
+  .ending-scene .char-wrap { width: 64px; height: 64px; animation: bounce 1s ease-in-out infinite; }
+  .ending-scene .char-wrap:last-child { animation-delay: 0.15s; }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-14px); }
+  }
+  #screen-ending p { margin-top: 18px; font-size: 17px; }
+</style>
+</head>
+<body>
+
+  <!-- 손그림 느낌을 위한 SVG 필터 (모든 캐릭터/도형에서 재사용) -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <filter id="handDrawn" x="-20%" y="-20%" width="140%" height="140%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="4" result="noise"/>
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.6"/>
+      </filter>
+    </defs>
+  </svg>
+
+  <!-- 1. 커버 -->
+  <section id="screen-cover" class="screen active">
+    <div class="envelope" id="envelope-btn">
+      <svg viewBox="0 0 170 120" width="100%" height="100%">
+        <rect x="4" y="14" width="162" height="102" rx="8" fill="#e8c98f" stroke="var(--wall-dark)" stroke-width="3" filter="url(#handDrawn)"/>
+        <path d="M6 16 L85 74 L164 16" fill="none" stroke="var(--wall-dark)" stroke-width="3" stroke-linejoin="round" filter="url(#handDrawn)"/>
+        <circle cx="85" cy="70" r="14" fill="var(--red)" stroke="var(--red-dark)" stroke-width="2" filter="url(#handDrawn)"/>
+        <path d="M79 70 c0-4 4-6 6-3 c2-3 6-1 6 3 c0 4-6 8-6 8 c0 0-6-4-6-8 Z" fill="#fff" opacity="0.85"/>
+      </svg>
+    </div>
+    <p class="cover-hint">눌러서 열어보기</p>
+  </section>
+
+  <!-- 커버 → 튜토리얼 사이 낙하 연출 -->
+  <div id="falling-overlay" class="hidden">
+    <div id="falling-char" class="char-wrap">
+      <svg viewBox="0 0 40 40" width="100%" height="100%">
+        <path d="M20 3 C13 10 8 17 8 25 C8 33 13 38 20 38 C27 38 32 33 32 25 C32 17 27 10 20 3 Z"
+              fill="var(--blue)" stroke="var(--blue-dark)" stroke-width="2" filter="url(#handDrawn)"/>
+        <path d="M9 17 C9 9 14 4 20 4 C26 4 31 9 31 17 C31 12 26 9 20 9 C14 9 9 12 9 17 Z"
+              fill="#2b2b2b" filter="url(#handDrawn)"/>
+        <circle cx="20" cy="19" r="10" fill="#ffe0bd" stroke="#d9a86c" stroke-width="1.5"/>
+        <circle cx="16" cy="20" r="1.8" fill="#2b2b2b"/>
+        <circle cx="24" cy="20" r="1.8" fill="#2b2b2b"/>
+        <path d="M16 25 Q20 28 24 25" stroke="#2b2b2b" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- 낙하 후 스토리 1: 대사 -->
+  <section id="screen-story-1" class="screen">
+    <div class="story-char char-wrap">
+      <svg viewBox="0 0 40 40" width="100%" height="100%">
+        <path d="M20 3 C13 10 8 17 8 25 C8 33 13 38 20 38 C27 38 32 33 32 25 C32 17 27 10 20 3 Z"
+              fill="var(--blue)" stroke="var(--blue-dark)" stroke-width="2" filter="url(#handDrawn)"/>
+        <path d="M9 17 C9 9 14 4 20 4 C26 4 31 9 31 17 C31 12 26 9 20 9 C14 9 9 12 9 17 Z"
+              fill="#2b2b2b" filter="url(#handDrawn)"/>
+        <circle cx="20" cy="19" r="10" fill="#ffe0bd" stroke="#d9a86c" stroke-width="1.5"/>
+        <circle cx="16" cy="20" r="1.8" fill="#2b2b2b"/>
+        <circle cx="24" cy="20" r="1.8" fill="#2b2b2b"/>
+        <path d="M16 25 Q20 28 24 25" stroke="#2b2b2b" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="speech-bubble">어떻게 된거지?</div>
+    <button class="primary-btn" id="story-1-next-btn">다음</button>
+  </section>
+
+  <!-- 낙하 후 스토리 2: 빙의 타이틀 -->
+  <section id="screen-story-2" class="screen">
+    <div class="light-burst"></div>
+    <div class="flower-title-wrap">
+      <span class="flower f1">🌸</span>
+      <span class="flower f2">🌸</span>
+      <span class="flower f3">🌸</span>
+      <span class="flower f4">🌸</span>
+      <span class="flower f5">🌸</span>
+      <span class="flower f6">🌸</span>
+      <h1 class="story-title">악역 영애 웹툰에<br>빙의되었습니다</h1>
+    </div>
+    <button class="primary-btn" id="story-2-next-btn">다음</button>
+  </section>
+
+  <!-- 낙하 후 스토리 3: 설명 -->
+  <section id="screen-story-3" class="screen">
+    <div class="story-caption">
+      다영이가 즐겨보는 웹툰 속<br>
+      <strong>악역 영애</strong>에 빙의된 준서.<br><br>
+      미로를 탈출하여 초대장을 얻어야만<br>
+      책 속에서 빠져나와 다영이를 만날 수 있다.
+    </div>
+    <button class="primary-btn" id="story-3-next-btn">다음</button>
+  </section>
+
+  <!-- 2. 튜토리얼 -->
+  <section id="screen-tutorial" class="screen">
+    <p>버튼을 누르고 있으면<br>캐릭터가 계속 움직여요.</p>
+    <div class="tutorial-pad">
+      <div class="t-up hint"></div>
+      <div class="t-left"></div>
+      <div class="t-right"></div>
+      <div class="t-down"></div>
+    </div>
+    <button class="primary-btn" id="tutorial-start-btn">시작하기</button>
+  </section>
+
+  <!-- 3. 미로 게임 -->
+  <section id="screen-maze" class="screen">
+    <div id="hud">남은 시간: <span id="timer">60</span>초</div>
+    <div id="maze-wrap">
+      <div id="maze"></div>
+      <div id="player" class="char-wrap">
+        <svg viewBox="0 0 40 40" width="100%" height="100%">
+          <path d="M20 3 C13 10 8 17 8 25 C8 33 13 38 20 38 C27 38 32 33 32 25 C32 17 27 10 20 3 Z"
+                fill="var(--blue)" stroke="var(--blue-dark)" stroke-width="2" filter="url(#handDrawn)"/>
+          <path d="M9 17 C9 9 14 4 20 4 C26 4 31 9 31 17 C31 12 26 9 20 9 C14 9 9 12 9 17 Z"
+                fill="#2b2b2b" filter="url(#handDrawn)"/>
+          <circle cx="20" cy="19" r="10" fill="#ffe0bd" stroke="#d9a86c" stroke-width="1.5"/>
+          <circle cx="16" cy="20" r="1.8" fill="#2b2b2b"/>
+          <circle cx="24" cy="20" r="1.8" fill="#2b2b2b"/>
+          <path d="M16 25 Q20 28 24 25" stroke="#2b2b2b" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+    <div id="pad">
+      <button id="btn-up" class="pad-btn">▲</button>
+      <button id="btn-left" class="pad-btn">◀</button>
+      <button id="btn-right" class="pad-btn">▶</button>
+      <button id="btn-down" class="pad-btn">▼</button>
+    </div>
+  </section>
+
+  <div id="overlay" class="hidden">
+    <p id="overlay-text"></p>
+    <button id="retry-btn">다시하기</button>
+  </div>
+
+  <!-- 4. 도착 -->
+  <section id="screen-arrival" class="screen">
+    <div class="arrival-scene">
+      <svg viewBox="0 0 120 120" width="120" height="120">
+        <path d="M20 55 L60 22 L100 55 V100 H20 Z" fill="#e8c98f" stroke="var(--wall-dark)" stroke-width="3" filter="url(#handDrawn)"/>
+        <path d="M14 58 L60 18 L106 58" fill="none" stroke="var(--wall-dark)" stroke-width="4" stroke-linecap="round" filter="url(#handDrawn)"/>
+        <rect x="50" y="70" width="20" height="30" fill="var(--red)" stroke="var(--red-dark)" stroke-width="2"/>
+        <rect x="30" y="65" width="16" height="16" fill="var(--blue)" stroke="var(--blue-dark)" stroke-width="2"/>
+      </svg>
+    </div>
+    <p>미로를 통과해서<br>초대장을 손에 넣었어요!</p>
+    <button class="primary-btn" id="arrival-next-btn">초대장 열어보기</button>
+  </section>
+
+  <!-- 5. 초대장 공개 -->
+  <section id="screen-invite" class="screen">
+    <canvas id="invite-canvas" width="300" height="380"></canvas>
+    <div class="invite-actions">
+      <button class="secondary-btn" id="save-image-btn">이미지로 저장하기</button>
+      <button class="primary-btn" id="invite-next-btn">다음</button>
+    </div>
+  </section>
+
+  <!-- 6. RSVP -->
+  <section id="screen-rsvp" class="screen">
+    <p>올 수 있나요?</p>
+    <div class="rsvp-buttons">
+      <button id="rsvp-going-btn">갈게!</button>
+      <button id="rsvp-like-btn">좋아!</button>
+    </div>
+  </section>
+
+  <!-- 7. 엔딩 -->
+  <section id="screen-ending" class="screen">
+    <div class="ending-scene">
+      <div class="char-wrap">
+        <svg viewBox="0 0 40 40" width="100%" height="100%">
+          <path d="M20 3 C13 10 8 17 8 25 C8 33 13 38 20 38 C27 38 32 33 32 25 C32 17 27 10 20 3 Z"
+                fill="var(--blue)" stroke="var(--blue-dark)" stroke-width="2" filter="url(#handDrawn)"/>
+          <path d="M9 17 C9 9 14 4 20 4 C26 4 31 9 31 17 C31 12 26 9 20 9 C14 9 9 12 9 17 Z"
+                fill="#2b2b2b" filter="url(#handDrawn)"/>
+          <circle cx="20" cy="19" r="10" fill="#ffe0bd" stroke="#d9a86c" stroke-width="1.5"/>
+          <circle cx="16" cy="20" r="1.8" fill="#2b2b2b"/>
+          <circle cx="24" cy="20" r="1.8" fill="#2b2b2b"/>
+          <path d="M16 25 Q20 28 24 25" stroke="#2b2b2b" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="char-wrap">
+        <svg viewBox="0 0 40 40" width="100%" height="100%">
+          <path d="M20 3 C13 10 8 17 8 25 C8 33 13 38 20 38 C27 38 32 33 32 25 C32 17 27 10 20 3 Z"
+                fill="var(--red)" stroke="var(--red-dark)" stroke-width="2" filter="url(#handDrawn)"/>
+          <g filter="url(#handDrawn)" fill="#2b2b2b">
+            <circle cx="9" cy="17" r="6"/>
+            <circle cx="13" cy="9" r="6"/>
+            <circle cx="20" cy="6" r="6.5"/>
+            <circle cx="27" cy="9" r="6"/>
+            <circle cx="31" cy="17" r="6"/>
+            <circle cx="8" cy="25" r="5"/>
+            <circle cx="32" cy="25" r="5"/>
+          </g>
+          <circle cx="20" cy="19" r="10" fill="#ffe0bd" stroke="#d9a86c" stroke-width="1.5"/>
+          <circle cx="16" cy="20" r="1.8" fill="#2b2b2b"/>
+          <circle cx="24" cy="20" r="1.8" fill="#2b2b2b"/>
+          <path d="M16 25 Q20 28 24 25" stroke="#2b2b2b" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+    <p>곧 만나요!</p>
+  </section>
+
+<script>
+// ============ 화면 전환 ============
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+}
+
+// 1 → 낙하 연출 → 스토리 1
+document.getElementById('envelope-btn').addEventListener('click', () => {
+  document.getElementById('screen-cover').classList.remove('active');
+  const fallingOverlay = document.getElementById('falling-overlay');
+  fallingOverlay.classList.remove('hidden');
+  setTimeout(() => {
+    fallingOverlay.classList.add('hidden');
+    showScreen('screen-story-1');
+  }, 1100);
+});
+
+// 스토리 1 → 2 → 3 → 튜토리얼
+document.getElementById('story-1-next-btn').addEventListener('click', () => showScreen('screen-story-2'));
+document.getElementById('story-2-next-btn').addEventListener('click', () => showScreen('screen-story-3'));
+document.getElementById('story-3-next-btn').addEventListener('click', () => showScreen('screen-tutorial'));
+
+// 2 → 3 (미로 시작)
+document.getElementById('tutorial-start-btn').addEventListener('click', () => {
+  showScreen('screen-maze');
+  startCountdown();
+});
+
+// ============ 3. 미로 게임 로직 ============
+// # = 벽/장애물(obstacle, 추후 바위·수풀 등 아트로 교체 예정), . = 길, S = 시작, G = 목표,
+// H = 하트(수집용 장식 요소, 통과 조건/시간에는 영향 없음)
+const MAZE_ROWS = [
+  "#########",
+  "#S..#...#",
+  "#.#.#.#.#",
+  "#.#...#.#",
+  "#H#####.#",
+  "#...H.#.#",
+  "#####H#.#",
+  "#...#.#.#",
+  "#.#.#.H.#",
+  "#.#...#G#",
+  "#########",
+];
+
+const CELL = 32;
+const MOVE_INTERVAL = 160; // 버튼을 누르고 있는 동안 한 칸 이동하는 간격(ms)
+const TIME_LIMIT = 60;
+
+const ROWS = MAZE_ROWS.length;
+const COLS = MAZE_ROWS[0].length;
+
+let start = null;
+let goal = null;
+const hearts = []; // [{ row, col, collected, el }]
+const grid = MAZE_ROWS.map((rowStr, r) =>
+  rowStr.split('').map((ch, c) => {
+    if (ch === 'S') start = { row: r, col: c };
+    if (ch === 'G') goal = { row: r, col: c };
+    if (ch === 'H') hearts.push({ row: r, col: c, collected: false, el: null });
+    return ch === '#' ? 1 : 0;
+  })
+);
+let heartsCollected = 0; // 지금은 표시 안 함, 추후 "n/m" HUD 확장 대비
+
+const mazeEl = document.getElementById('maze');
+const mazeWrapEl = document.getElementById('maze-wrap');
+const playerEl = document.getElementById('player');
+const timerEl = document.getElementById('timer');
+const hudEl = document.getElementById('hud');
+const overlayEl = document.getElementById('overlay');
+const overlayTextEl = document.getElementById('overlay-text');
+const retryBtn = document.getElementById('retry-btn');
+
+mazeEl.style.width = (COLS * CELL) + 'px';
+mazeEl.style.height = (ROWS * CELL) + 'px';
+mazeWrapEl.style.width = (COLS * CELL) + 'px';
+mazeWrapEl.style.height = (ROWS * CELL) + 'px';
+
+function renderMaze() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const div = document.createElement('div');
+      const isGoal = goal.row === r && goal.col === c;
+      div.className = 'cell ' + (grid[r][c] === 1 ? 'wall' : (isGoal ? 'goal' : 'path'));
+      div.style.left = (c * CELL) + 'px';
+      div.style.top = (r * CELL) + 'px';
+      div.style.width = CELL + 'px';
+      div.style.height = CELL + 'px';
+      mazeEl.appendChild(div);
+    }
+  }
+  playerEl.style.width = (CELL * 0.6) + 'px';
+  playerEl.style.height = (CELL * 0.6) + 'px';
+}
+
+function renderHearts() {
+  hearts.forEach(h => {
+    const el = document.createElement('div');
+    el.className = 'heart';
+    el.textContent = '♥';
+    el.style.left = (h.col * CELL + CELL * 0.22) + 'px';
+    el.style.top = (h.row * CELL + CELL * 0.18) + 'px';
+    el.style.width = (CELL * 0.56) + 'px';
+    el.style.height = (CELL * 0.56) + 'px';
+    mazeEl.appendChild(el);
+    h.el = el;
+  });
+}
+
+function spawnHeartPop(row, col) {
+  const pop = document.createElement('div');
+  pop.className = 'heart-pop';
+  pop.textContent = '+♥';
+  pop.style.left = (col * CELL + CELL * 0.1) + 'px';
+  pop.style.top = (row * CELL) + 'px';
+  mazeEl.appendChild(pop);
+  pop.addEventListener('animationend', () => pop.remove());
+}
+
+let player = { ...start };
+let activeDir = null;
+let activePointerId = null;
+let moveTimer = null;
+let countdownTimer = null;
+let timeLeft = TIME_LIMIT;
+let gameOver = false;
+
+function renderPlayer() {
+  const offset = CELL * 0.2;
+  playerEl.style.left = (player.col * CELL + offset) + 'px';
+  playerEl.style.top = (player.row * CELL + offset) + 'px';
+}
+
+function canMove(row, col) {
+  return row >= 0 && row < ROWS && col >= 0 && col < COLS && grid[row][col] === 0;
+}
+
+function step() {
+  if (!activeDir || gameOver) return;
+  let { row, col } = player;
+  if (activeDir === 'up') row--;
+  else if (activeDir === 'down') row++;
+  else if (activeDir === 'left') col--;
+  else if (activeDir === 'right') col++;
+  if (canMove(row, col)) {
+    player = { row, col };
+    renderPlayer();
+    collectHeart(row, col);
+    checkGoal();
+  }
+}
+
+function collectHeart(row, col) {
+  const heart = hearts.find(h => !h.collected && h.row === row && h.col === col);
+  if (!heart) return;
+  heart.collected = true;
+  heartsCollected++;
+  heart.el.classList.add('collected');
+  spawnHeartPop(row, col);
+}
+
+function startMove(dir, pointerId) {
+  if (gameOver) return;
+  activeDir = dir;
+  activePointerId = pointerId;
+  step();
+  if (moveTimer) clearInterval(moveTimer);
+  moveTimer = setInterval(step, MOVE_INTERVAL);
+}
+
+function stopMove(pointerId) {
+  // pointerId 없이 호출되면(예: endGame의 강제 정지) 무조건 멈추고,
+  // 있으면 다른 손가락이 누르고 있는 버튼을 떼도 이동이 멈추지 않도록 소유자만 비교
+  if (pointerId !== undefined && pointerId !== activePointerId) return;
+  activeDir = null;
+  activePointerId = null;
+  if (moveTimer) { clearInterval(moveTimer); moveTimer = null; }
+}
+
+function bindPad(id, dir) {
+  const btn = document.getElementById(id);
+  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); startMove(dir, e.pointerId); });
+  btn.addEventListener('pointerup', (e) => stopMove(e.pointerId));
+  btn.addEventListener('pointercancel', (e) => stopMove(e.pointerId));
+  btn.addEventListener('pointerleave', (e) => stopMove(e.pointerId));
+}
+bindPad('btn-up', 'up');
+bindPad('btn-down', 'down');
+bindPad('btn-left', 'left');
+bindPad('btn-right', 'right');
+
+function updateTimerDisplay() {
+  timerEl.textContent = timeLeft;
+  hudEl.classList.toggle('warn', timeLeft <= 10);
+}
+
+function startCountdown() {
+  timeLeft = TIME_LIMIT;
+  updateTimerDisplay();
+  countdownTimer = setInterval(() => {
+    timeLeft--;
+    updateTimerDisplay();
+    if (timeLeft <= 0) endGame(false);
+  }, 1000);
+}
+
+function checkGoal() {
+  if (player.row === goal.row && player.col === goal.col) endGame(true);
+}
+
+function endGame(won) {
+  gameOver = true;
+  stopMove();
+  clearInterval(countdownTimer);
+  if (won) {
+    // 통과 시에는 오버레이 없이 곧바로 4. 도착 화면으로 이동
+    setTimeout(() => showScreen('screen-arrival'), 400);
+  } else {
+    overlayTextEl.textContent = '시간 초과! 다시 도전해보세요.';
+    overlayEl.classList.remove('hidden');
+  }
+}
+
+function resetHearts() {
+  heartsCollected = 0;
+  hearts.forEach(h => {
+    h.collected = false;
+    if (h.el) h.el.classList.remove('collected');
+  });
+}
+
+function resetGame() {
+  gameOver = false;
+  player = { ...start };
+  renderPlayer();
+  resetHearts();
+  overlayEl.classList.add('hidden');
+  startCountdown();
+}
+
+retryBtn.addEventListener('click', resetGame);
+
+renderMaze();
+renderHearts();
+renderPlayer();
+
+// ============ 4 → 5 ============
+document.getElementById('arrival-next-btn').addEventListener('click', () => {
+  showScreen('screen-invite');
+});
+
+// ============ 5. 초대장 공개 (캔버스로 그려서 그대로 저장 가능하게) ============
+function wobblyRoundedRect(ctx, x, y, w, h, r, seed) {
+  // 손그림 느낌을 위해 사각형 테두리를 sin 기반의 고정 지터로 살짝 흔들어 그림 (매번 동일한 모양 유지)
+  const jitter = (t) => Math.sin(t * 12.9898 + seed) * 1.6;
+  ctx.beginPath();
+  const steps = 40;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const px = x + t * w;
+    ctx.lineTo(px, y + jitter(t));
+  }
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const py = y + t * h;
+    ctx.lineTo(x + w + jitter(t + 2), py);
+  }
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const px = x + w - t * w;
+    ctx.lineTo(px, y + h + jitter(t + 4));
+  }
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const py = y + h - t * h;
+    ctx.lineTo(x + jitter(t + 6), py);
+  }
+  ctx.closePath();
+}
+
+function drawInviteCard() {
+  const canvas = document.getElementById('invite-canvas');
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#fffaf0';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  wobblyRoundedRect(ctx, 16, 16, canvas.width - 32, canvas.height - 32, 10, 1);
+  ctx.strokeStyle = '#c99a6a';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // 작은 하트 낙서
+  ctx.fillStyle = '#f2879c';
+  ctx.beginPath();
+  ctx.arc(canvas.width / 2 - 6, 100, 6, 0, Math.PI * 2);
+  ctx.arc(canvas.width / 2 + 6, 100, 6, 0, Math.PI * 2);
+  ctx.moveTo(canvas.width / 2 - 12, 103);
+  ctx.lineTo(canvas.width / 2, 116);
+  ctx.lineTo(canvas.width / 2 + 12, 103);
+  ctx.fill();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#b8502a';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText('To. 손준서', canvas.width / 2, 150);
+
+  ctx.fillStyle = '#5c4632';
+  ctx.font = 'bold 26px sans-serif';
+  ctx.fillText('우리집에 놀러와!', canvas.width / 2, 210);
+
+  ctx.font = '17px sans-serif';
+  ctx.fillStyle = '#8a7154';
+  ctx.fillText('2026년 10월 9일 (금)', canvas.width / 2, 260);
+  ctx.fillText('준서다영이네 집', canvas.width / 2, 288);
+}
+drawInviteCard();
+
+document.getElementById('save-image-btn').addEventListener('click', () => {
+  const canvas = document.getElementById('invite-canvas');
+  const link = document.createElement('a');
+  link.download = 'invitation.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+
+// ============ 5 → 6 → 7 ============
+document.getElementById('invite-next-btn').addEventListener('click', () => {
+  showScreen('screen-rsvp');
+});
+document.getElementById('rsvp-going-btn').addEventListener('click', () => showScreen('screen-ending'));
+document.getElementById('rsvp-like-btn').addEventListener('click', () => showScreen('screen-ending'));
+</script>
+</body>
+</html>
